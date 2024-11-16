@@ -5,6 +5,7 @@ using Newtonsoft.Json;
 using Discord_Log_Bot.Helpers;
 using Discord_Log_Bot.Enums;
 using System.Threading.Channels;
+using System.Collections.Concurrent;
 
 namespace Discord_Log_Bot.LoggerModuls
 {
@@ -12,6 +13,8 @@ namespace Discord_Log_Bot.LoggerModuls
     {
         private readonly Dictionary<ulong, string> _messagesCache = new Dictionary<ulong, string>();
         private HashSet<ulong> _loggingChannels;
+        private readonly ConcurrentQueue<LogMessageModel> _logQueue = new ConcurrentQueue<LogMessageModel>();
+        private readonly SemaphoreSlim _logSemaphore = new SemaphoreSlim(1, 1);
 
         public UserMessageLogController(HashSet<ulong> loggingChannels) => _loggingChannels = loggingChannels;
 
@@ -22,50 +25,11 @@ namespace Discord_Log_Bot.LoggerModuls
 
             // Сохраняем сообщение в кэш
             _messagesCache[message.Id] = message.Content;
-            LogMessageModel log;
+            LogMessageModel log = await CreateLogMessage(userMessage);
 
-            if (userMessage.ReferencedMessage != null)
-            {
-                var referencedMessage = userMessage.ReferencedMessage;
-                log = new LogMessageModel
-                {
-                    Timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
-                    UserId = message.Author.Id,
-                    Action = ActionMessageType.Send.ToString(),
-                    ReferencedMessage = referencedMessage.Content,
-                    MessageContent = message.Content,
-                    Channel = (message.Channel as SocketTextChannel)?.Name ?? "Неизвестный канал",
-                    ChannelId = (message.Channel as SocketTextChannel)?.Id ?? default
-                };
-            }
-            else if (userMessage is IThreadChannel threadChannel)
-            {
-                // Сообщение было отправлено в ветке
-                log = new LogMessageModel
-                {
-                    Timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
-                    UserId = userMessage.Author.Id,
-                    Action = ActionMessageType.Send.ToString(),
-                    MessageContent = userMessage.Content,
-                    Channel = $"Ветка {threadChannel.Name}",
-                    ChannelId = threadChannel.Id
-                };
-            }
-            else
-            {
-                log = new LogMessageModel
-                {
-                    Timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
-                    UserId = message.Author.Id,
-                    Action = ActionMessageType.Send.ToString(),
-                    MessageContent = message.Content,
-                    Channel = (message.Channel as SocketTextChannel)?.Name ?? "Неизвестный канал",
-                    ChannelId = (message.Channel as SocketTextChannel)?.Id ?? default
-                };
-            }
+            _logQueue.Enqueue(log);
 
-            string jsonLog = JsonConvert.SerializeObject(log, Formatting.Indented);
-            await File.AppendAllTextAsync(FilePathHelper.GetLogFilePath(message.Channel), jsonLog + Environment.NewLine);
+            await ProcessLogQueueAsync(message.Channel);
         }
 
         public async Task LogMessageUpdateAsync(Cacheable<IMessage, ulong> before, SocketMessage after, ISocketMessageChannel channel)
@@ -86,10 +50,10 @@ namespace Discord_Log_Bot.LoggerModuls
                     ChannelId = (channel as SocketTextChannel)?.Id ?? default
                 };
 
-                string jsonLog = JsonConvert.SerializeObject(log, Formatting.Indented);
-                await File.AppendAllTextAsync(FilePathHelper.GetLogFilePath(channel), jsonLog + Environment.NewLine);
+                _logQueue.Enqueue(log);
 
-                // Обновляем сообщение в кэше
+                await ProcessLogQueueAsync(channel);
+
                 _messagesCache[after.Id] = newMessage;
             }
         }
@@ -108,7 +72,7 @@ namespace Discord_Log_Bot.LoggerModuls
             if (_messagesCache.TryGetValue(message.Id, out string cachedMessageContent))
             {
                 logEntry = $"[{DateTime.Now}] Сообщение было удалено в канале {channel?.Name}: {message?.Author?.Username}: {cachedMessageContent}";
-                _messagesCache.Remove(message.Id);  // Удаляем сообщение из кэша
+                _messagesCache.Remove(message.Id); 
 
                 log = new LogMessageModel
                 {
@@ -134,8 +98,72 @@ namespace Discord_Log_Bot.LoggerModuls
                 };
             }
 
-            string jsonLog = JsonConvert.SerializeObject(log, Formatting.Indented);
-            await File.AppendAllTextAsync(FilePathHelper.GetLogFilePath((ISocketMessageChannel)channel), jsonLog + Environment.NewLine);
+            _logQueue.Enqueue(log);
+
+            await ProcessLogQueueAsync(channel as ISocketMessageChannel);
+        }
+
+        private async Task<LogMessageModel> CreateLogMessage(SocketUserMessage userMessage)
+        {
+            LogMessageModel log;
+
+            if (userMessage.ReferencedMessage != null)
+            {
+                var referencedMessage = userMessage.ReferencedMessage;
+                log = new LogMessageModel
+                {
+                    Timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
+                    UserId = userMessage.Author.Id,
+                    Action = ActionMessageType.Send.ToString(),
+                    ReferencedMessage = referencedMessage.Content,
+                    MessageContent = userMessage.Content,
+                    Channel = (userMessage.Channel as SocketTextChannel)?.Name ?? "Неизвестный канал",
+                    ChannelId = (userMessage.Channel as SocketTextChannel)?.Id ?? default
+                };
+            }
+            else if (userMessage is IThreadChannel threadChannel)
+            {
+                log = new LogMessageModel
+                {
+                    Timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
+                    UserId = userMessage.Author.Id,
+                    Action = ActionMessageType.Send.ToString(),
+                    MessageContent = userMessage.Content,
+                    Channel = $"Ветка {threadChannel.Name}",
+                    ChannelId = threadChannel.Id
+                };
+            }
+            else
+            {
+                log = new LogMessageModel
+                {
+                    Timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
+                    UserId = userMessage.Author.Id,
+                    Action = ActionMessageType.Send.ToString(),
+                    MessageContent = userMessage.Content,
+                    Channel = (userMessage.Channel as SocketTextChannel)?.Name ?? "Неизвестный канал",
+                    ChannelId = (userMessage.Channel as SocketTextChannel)?.Id ?? default
+                };
+            }
+
+            return log;
+        }
+        private async Task ProcessLogQueueAsync(ISocketMessageChannel channel)
+        {
+            await _logSemaphore.WaitAsync();
+
+            try
+            {
+                while (_logQueue.TryDequeue(out var log))
+                {
+                    string jsonLog = JsonConvert.SerializeObject(log, Formatting.Indented);
+                    await File.AppendAllTextAsync(FilePathHelper.GetLogFilePath(channel), jsonLog + Environment.NewLine);
+                }
+            }
+            finally
+            {
+                _logSemaphore.Release();
+            }
         }
     }
 }

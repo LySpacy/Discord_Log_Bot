@@ -88,7 +88,6 @@ namespace Discord_Log_Bot
 
                 if (userMessage.HasCharPrefix('!', ref argPos) || userMessage.HasMentionPrefix(_client.CurrentUser, ref argPos))
                 {
-                    // Выполняем команду
                     var result = await _commands.ExecuteAsync(context, argPos, _services);
 
                     if (!result.IsSuccess)
