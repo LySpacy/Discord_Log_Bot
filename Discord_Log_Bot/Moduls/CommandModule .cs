@@ -1,5 +1,7 @@
 ﻿using Discord;
 using Discord.Commands;
+using Discord.WebSocket;
+using Discord_Log_Bot.Controllers;
 using Discord_Log_Bot.Enums;
 using Discord_Log_Bot.LoggerModuls;
 using System.Globalization;
@@ -10,15 +12,17 @@ namespace Discord_Log_Bot.Moduls
     public class CommandModule : ModuleBase<SocketCommandContext>
     {
         private readonly ChannelLogController _channelLogController;
+        private readonly BotChannelController _botChannelController;
 
-        public CommandModule(ChannelLogController channelLogController)
+        public CommandModule(ChannelLogController channelLogController, BotChannelController botChannelController)
         {
             _channelLogController = channelLogController;
+            _botChannelController = botChannelController;
         }
 
         // Команда !loghelp
         [Command("loghelp")]
-        [RequireUserPermission(GuildPermission.ManageChannels)]
+        [RequireUserPermission(GuildPermission.Administrator)]
         public async Task HelpCommand()
         {
             var embed = new EmbedBuilder()
@@ -34,7 +38,7 @@ namespace Discord_Log_Bot.Moduls
         }
 
         [Command("logcontollerhelp")]
-        [RequireUserPermission(GuildPermission.ManageChannels)]
+        [RequireUserPermission(GuildPermission.Administrator)]
         public async Task HelpControllerLogCommand()
         {
             var embed = new EmbedBuilder()
@@ -49,7 +53,7 @@ namespace Discord_Log_Bot.Moduls
         }
 
         [Command("helpsetnlog")]
-        [RequireUserPermission(GuildPermission.ManageChannels)]
+        [RequireUserPermission(GuildPermission.Administrator)]
         public async Task HelpUserLogCommand()
         {
             var embed = new EmbedBuilder()
@@ -63,25 +67,38 @@ namespace Discord_Log_Bot.Moduls
         }
 
         [Command("enablelog")]
-        [RequireUserPermission(GuildPermission.ManageChannels)]
+        [RequireUserPermission(GuildPermission.Administrator)]
         public async Task EnableLogCommand(string channelArg)
         {
             await _channelLogController.EnableLogging(Context.Message, channelArg);
         }
 
         [Command("disablelog")]
-        [RequireUserPermission(GuildPermission.ManageChannels)]
+        [RequireUserPermission(GuildPermission.Administrator)]
         public async Task DisableLogCommand(string channelArg)
         {
             await _channelLogController.DisableLogging(Context.Message, channelArg);
         }
 
         [Command("getlogs")]
-        [RequireUserPermission(GuildPermission.ManageChannels)]
+        [RequireUserPermission(GuildPermission.Administrator)]
         public async Task GetLogsCommand(string channelArg, string dateArg)
         {
             // Вызов метода из контроллера для получения логов
             await _channelLogController.GetLogsAsync(Context, channelArg, dateArg);
+        }
+
+        [Command("startlogbot")]
+        [RequireUserPermission(GuildPermission.Administrator)] 
+        public async Task StartLogBotCommand()
+        {
+           await _botChannelController.StartLogBotAsync(Context);
+        }
+
+        [Command("enablelogall")]
+        public async Task EnableLoggingAllCommand()
+        {
+            await _channelLogController.EnableLoggingForAllChannels(Context);
         }
     }
 }

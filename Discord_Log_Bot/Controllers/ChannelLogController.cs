@@ -6,7 +6,6 @@ using Discord_Log_Bot.Helpers;
 using Discord_Log_Bot.Models;
 using Newtonsoft.Json;
 using System.Globalization;
-using System.Threading.Channels;
 
 namespace Discord_Log_Bot.LoggerModuls
 {
@@ -55,23 +54,14 @@ namespace Discord_Log_Bot.LoggerModuls
                     await Task.Run(() => File.AppendAllText(logFilePath, jsonLog + Environment.NewLine));
 
                     await message.Channel.SendMessageAsync($"Логирование включено для канала: <#{channelIdString}>");
-                }
-                else
-                {
-                    await message.Channel.SendMessageAsync($"Логирование уже включено для канала: <#{channelIdString}>");
-                }
-            }
-            else
-            {
-                await message.Channel.SendMessageAsync($"Не удалось найти канал с ID {channelIdString}.");
-            }
+                }               
+            }            
         }
 
         public async Task DisableLogging(SocketUserMessage message, string channelArg)
         {
             if (string.IsNullOrEmpty(channelArg))
             {
-                await message.Channel.SendMessageAsync("Пожалуйста, укажите канал, например: `!disablelog #канал`");
                 return;
             }
 
@@ -79,7 +69,6 @@ namespace Discord_Log_Bot.LoggerModuls
             SocketGuild guild = (message.Channel as SocketTextChannel)?.Guild;
             if (guild == null)
             {
-                await message.Channel.SendMessageAsync("Не удалось найти сервер, на котором был вызван запрос.");
                 return;
             }
 
@@ -93,7 +82,6 @@ namespace Discord_Log_Bot.LoggerModuls
                 {
                     // Удаляем канал из списка логируемых каналов
                     _loggingChannels.Remove(channel.Id);
-                    await message.Channel.SendMessageAsync($"Логирование отключено для канала: <#{channelIdString}>");
 
                     // Создаем объект LogEventModel с информацией о событии
                     var logEvent = new LogLoggerEventModel
@@ -111,16 +99,9 @@ namespace Discord_Log_Bot.LoggerModuls
                     // Прекращаем логирование, добавляем уведомление в файл
                     string logFilePath = FilePathHelper.GetLogFilePath(channel);
                     await File.AppendAllTextAsync(logFilePath, jsonLog + Environment.NewLine);
-                }
-                else
-                {
-                    await message.Channel.SendMessageAsync($"Логирование уже отключено для канала <#{channelIdString}>.");
-                }
+                }             
             }
-            else
-            {
-                await message.Channel.SendMessageAsync($"Не удалось найти канал с ID или именем {channelArg}.");
-            }
+           
         }
 
         public async Task GetLogsAsync(SocketCommandContext contexCommand, string channelArg, string dateArg)
@@ -179,6 +160,62 @@ namespace Discord_Log_Bot.LoggerModuls
             {
                 await contexCommand.Channel.SendMessageAsync("Указанный канал не является текстовым каналом.");
             }
+        }
+
+        public async Task StartLoggingForNewChannel(ITextChannel channel)
+        {
+            if (!_loggingChannels.Contains(channel.Id))
+            {
+                _loggingChannels.Add(channel.Id);
+
+                var logEvent = new LogLoggerEventModel
+                {
+                    Timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
+                    Action = ActionEventType.StartLogging,
+                    UserId = default,  
+                    Channel = channel.Name,
+                    ChannelId = channel.Id
+                };
+
+                // Сохраняем событие в лог
+                string jsonLog = JsonConvert.SerializeObject(logEvent, Formatting.Indented);
+                string logFilePath = FilePathHelper.GetLogFilePath(channel as ISocketMessageChannel);
+                await Task.Run(() => File.AppendAllText(logFilePath, jsonLog + Environment.NewLine));
+            }
+        }
+
+        public async Task EnableLoggingForAllChannels(SocketCommandContext context)
+        {
+            var guild = context.Guild;
+            if (guild == null)
+            {
+                await context.Channel.SendMessageAsync("Не удалось найти сервер.");
+                return;
+            }
+
+            var excludedChannelNames = new HashSet<string>
+            {
+                "log_bot-logs",
+                "log_bot-command",
+                "log-bot_message"
+            };
+
+            await context.Channel.SendMessageAsync("Начинаю включать логирование для всех текстовых каналов...");
+
+            foreach (var channel in guild.TextChannels)
+            {
+                // Пропускаем каналы с определенными именами
+                if (excludedChannelNames.Contains(channel.Name))
+                {
+                    continue; // Пропускаем этот канал
+                }
+
+                // Включаем логирование для канала
+                await StartLoggingForNewChannel(channel);
+                await context.Channel.SendMessageAsync($"Логирование включено для канала <#{channel.Id}>");
+            }
+
+            await context.Channel.SendMessageAsync("Логирование включено для всех текстовых каналов.");
         }
     }
 }

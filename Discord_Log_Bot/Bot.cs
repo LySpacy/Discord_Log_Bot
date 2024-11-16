@@ -5,6 +5,7 @@ using Discord_Log_Bot.LoggerModuls;
 using Discord_Log_Bot.Moduls;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Configuration;
+using Discord_Log_Bot.Controllers;
 
 namespace Discord_Log_Bot
 {
@@ -15,6 +16,7 @@ namespace Discord_Log_Bot
         private readonly IServiceProvider _services;
         private readonly CommandModule _commandModule;
         private readonly UserMessageLogController _userMessageLogController;
+        private readonly ChannelLogController _channelLogController;
         private readonly IConfiguration _configuration;
 
         private HashSet<ulong> _loggingChannels = new HashSet<ulong>();
@@ -33,13 +35,15 @@ namespace Discord_Log_Bot
             _configuration = configuration;
             _commands = new CommandService();
             _userMessageLogController = new UserMessageLogController(_loggingChannels);
+            _channelLogController = new ChannelLogController(_loggingChannels);
 
             var services = new ServiceCollection()
                 .AddSingleton(_client)
                 .AddSingleton(_commands)
                 .AddSingleton(_loggingChannels)
-                .AddSingleton<ChannelLogController>()  
-                .AddSingleton<CommandModule>()        
+                .AddSingleton(_channelLogController)
+                .AddSingleton<BotChannelController>()
+                .AddSingleton<CommandModule>()
                 .BuildServiceProvider();
 
             _services = services;
@@ -50,6 +54,7 @@ namespace Discord_Log_Bot
             _client.MessageReceived += HandleMessageAsync;
             _client.MessageUpdated += LogMessageUpdateAsync;
             _client.MessageDeleted += LogMessageDeleteAsync;
+            _client.ChannelCreated += OnChannelCreated;
         }
 
         public async Task RunBotAsync()
@@ -94,6 +99,13 @@ namespace Discord_Log_Bot
                 {
                     await LogMessageAsync(userMessage);
                 }
+            }
+        }
+        private async Task OnChannelCreated(SocketChannel channel)
+        {
+            if (channel is ITextChannel textChannel)
+            {
+                await _channelLogController.StartLoggingForNewChannel((ITextChannel)channel);
             }
         }
         private async Task LogMessageAsync(SocketMessage message)
