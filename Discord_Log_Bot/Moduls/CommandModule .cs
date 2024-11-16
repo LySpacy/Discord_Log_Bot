@@ -20,24 +20,25 @@ namespace Discord_Log_Bot.Moduls
             _botChannelController = botChannelController;
         }
 
-        // Команда !loghelp
-        [Command("loghelp")]
+        #region Команды-помощника
+        [Command("helplog")]
         [RequireUserPermission(GuildPermission.Administrator)]
         public async Task HelpCommand()
         {
             var embed = new EmbedBuilder()
                 .WithTitle("Список команд")
                 .WithDescription("Вот доступные команды:")
-                .AddField("!loghelp", "Показывает список доступных команд.")
-                .AddField("!logcontollerhelp", "Показывает список доступных команд по управлению логированием каналов")
-                .AddField("!helpsetnlog", "Показывает список доступных команд для получения логов")
+                .AddField("!helplog", "Показывает список доступных команд.")
+                .AddField("!create_log_bot_channels", "Создает каналы для взаимодействия с ботом (желательно).")
+                .AddField("!help_logcontoller", "Показывает список доступных команд по управлению логированием каналов")
+                .AddField("!help_getlog", "Показывает список доступных команд для получения логов")
                 .WithColor(Color.Blue)
                 .Build();
 
             await ReplyAsync(embed: embed);
         }
 
-        [Command("logcontollerhelp")]
+        [Command("help_logcontoller")]
         [RequireUserPermission(GuildPermission.Administrator)]
         public async Task HelpControllerLogCommand()
         {
@@ -46,13 +47,15 @@ namespace Discord_Log_Bot.Moduls
                 .WithDescription("Вот доступные команды с получениями логов пользователя:")
                 .AddField("!enablelog <канал>", "Начинает логирование канала")
                 .AddField("!disablelog <канал>", "Прекращает логирование канала")
+                .AddField("!enablelogall", "Начинает логирование всех каналов")
+                .AddField("!disablelogall", "Прекращает логирование всех каналов")
                 .WithColor(Color.Green)
                 .Build();
 
             await ReplyAsync(embed: embed);
         }
 
-        [Command("helpsetnlog")]
+        [Command("help_getlog")]
         [RequireUserPermission(GuildPermission.Administrator)]
         public async Task HelpUserLogCommand()
         {
@@ -65,20 +68,38 @@ namespace Discord_Log_Bot.Moduls
 
             await ReplyAsync(embed: embed);
         }
+        #endregion
 
+        #region Команды по отслеживанию логов
         [Command("enablelog")]
         [RequireUserPermission(GuildPermission.Administrator)]
         public async Task EnableLogCommand(string channelArg)
         {
-            await _channelLogController.EnableLogging(Context.Message, channelArg);
+            await _channelLogController.EnableLogging(Context, channelArg);
         }
 
         [Command("disablelog")]
         [RequireUserPermission(GuildPermission.Administrator)]
         public async Task DisableLogCommand(string channelArg)
         {
-            await _channelLogController.DisableLogging(Context.Message, channelArg);
+            await _channelLogController.DisableLogging(Context, channelArg);
         }
+
+
+        [Command("enablelogall")]
+        [RequireUserPermission(GuildPermission.Administrator)]
+        public async Task EnableLoggingAllCommand()
+        {
+            await _channelLogController.EnableLoggingForAllChannels(Context);
+        }
+
+        [Command("disablelogall")]
+        [RequireUserPermission(GuildPermission.Administrator)]
+        public async Task DisableLoggingForAllChannels()
+        {
+            await _channelLogController.DisableLoggingForAllChannels(Context);
+        }
+        #endregion
 
         [Command("getlogs")]
         [RequireUserPermission(GuildPermission.Administrator)]
@@ -88,18 +109,12 @@ namespace Discord_Log_Bot.Moduls
             await _channelLogController.GetLogsAsync(Context, channelArg, dateArg);
         }
 
-        [Command("startlogbot")]
+        [Command("create_log_bot_channels")]
         [RequireUserPermission(GuildPermission.Administrator)] 
         public async Task StartLogBotCommand()
         {
            await _botChannelController.StartLogBotAsync(Context);
         }
 
-        [Command("enablelogall")]
-        [RequireUserPermission(GuildPermission.Administrator)]
-        public async Task EnableLoggingAllCommand()
-        {
-            await _channelLogController.EnableLoggingForAllChannels(Context);
-        }
     }
 }

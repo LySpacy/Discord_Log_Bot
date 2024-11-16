@@ -22,16 +22,47 @@ namespace Discord_Log_Bot.LoggerModuls
 
             // Сохраняем сообщение в кэш
             _messagesCache[message.Id] = message.Content;
+            LogMessageModel log;
 
-            var log = new LogMessageModel
+            if (userMessage.ReferencedMessage != null)
             {
-                Timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
-                UserId= message.Author.Id,
-                Action = ActionMessageType.Send,
-                MessageContent = message.Content,
-                Channel = (message.Channel as SocketTextChannel)?.Name ?? "Неизвестный канал",
-                ChannelId = (message.Channel as SocketTextChannel)?.Id ?? default
-            };
+                var referencedMessage = userMessage.ReferencedMessage;
+                log = new LogMessageModel
+                {
+                    Timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
+                    UserId = message.Author.Id,
+                    Action = ActionMessageType.Send.ToString(),
+                    ReferencedMessage = referencedMessage.Content,
+                    MessageContent = message.Content,
+                    Channel = (message.Channel as SocketTextChannel)?.Name ?? "Неизвестный канал",
+                    ChannelId = (message.Channel as SocketTextChannel)?.Id ?? default
+                };
+            }
+            else if (userMessage is IThreadChannel threadChannel)
+            {
+                // Сообщение было отправлено в ветке
+                log = new LogMessageModel
+                {
+                    Timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
+                    UserId = userMessage.Author.Id,
+                    Action = ActionMessageType.Send.ToString(),
+                    MessageContent = userMessage.Content,
+                    Channel = $"Ветка {threadChannel.Name}",
+                    ChannelId = threadChannel.Id
+                };
+            }
+            else
+            {
+                log = new LogMessageModel
+                {
+                    Timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
+                    UserId = message.Author.Id,
+                    Action = ActionMessageType.Send.ToString(),
+                    MessageContent = message.Content,
+                    Channel = (message.Channel as SocketTextChannel)?.Name ?? "Неизвестный канал",
+                    ChannelId = (message.Channel as SocketTextChannel)?.Id ?? default
+                };
+            }
 
             string jsonLog = JsonConvert.SerializeObject(log, Formatting.Indented);
             await File.AppendAllTextAsync(FilePathHelper.GetLogFilePath(message.Channel), jsonLog + Environment.NewLine);
@@ -49,7 +80,7 @@ namespace Discord_Log_Bot.LoggerModuls
                 {
                     Timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
                     UserId = after.Author.Id,
-                    Action = ActionMessageType.Update,
+                    Action = ActionMessageType.Update.ToString(),
                     MessageContent = $"Старое: {oldMessage} Новое: {newMessage}",
                     Channel = (channel as SocketTextChannel)?.Name ?? "Неизвестный канал",
                     ChannelId = (channel as SocketTextChannel)?.Id ?? default
@@ -83,7 +114,7 @@ namespace Discord_Log_Bot.LoggerModuls
                 {
                     Timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
                     UserId = message?.Author?.Id ?? default,
-                    Action = ActionMessageType.Delete,
+                    Action = ActionMessageType.Delete.ToString(),
                     MessageContent = cachedMessageContent,
                     Channel = (channel as SocketTextChannel)?.Name ?? "Неизвестный канал",
                     ChannelId = (channel as SocketTextChannel)?.Id ?? default
@@ -96,7 +127,7 @@ namespace Discord_Log_Bot.LoggerModuls
                 {
                     Timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
                     UserId = message?.Author?.Id ?? default,
-                    Action = ActionMessageType.Delete,
+                    Action = ActionMessageType.Delete.ToString(),
                     MessageContent = "Сообщение недоступно в кеше",
                     Channel = (channel as SocketTextChannel)?.Name ?? "Неизвестный канал",
                     ChannelId = (channel as SocketTextChannel)?.Id ?? default

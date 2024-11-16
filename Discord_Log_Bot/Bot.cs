@@ -25,7 +25,6 @@ namespace Discord_Log_Bot
         {
             _client = new DiscordSocketClient(new DiscordSocketConfig
             {
-                MessageCacheSize = 1000,
                 LogLevel = LogSeverity.Info,
                 GatewayIntents = GatewayIntents.Guilds
                                 | GatewayIntents.GuildMessages
@@ -55,6 +54,8 @@ namespace Discord_Log_Bot
             _client.MessageUpdated += LogMessageUpdateAsync;
             _client.MessageDeleted += LogMessageDeleteAsync;
             _client.ChannelCreated += OnChannelCreated;
+            _client.ThreadCreated += OnThreadCreated;
+            _client.ThreadDeleted += OnThreadDeleted;
         }
 
         public async Task RunBotAsync()
@@ -107,6 +108,16 @@ namespace Discord_Log_Bot
             {
                 await _channelLogController.StartLoggingForNewChannel((ITextChannel)channel);
             }
+        }
+
+        private async Task OnThreadCreated(SocketThreadChannel threadChannel)
+        {
+            await _channelLogController.OnThreadCreated(threadChannel);
+        }
+
+        private async Task OnThreadDeleted(Cacheable<SocketThreadChannel, ulong> threadChannelCache)
+        {
+            await _channelLogController.OnThreadDeleted(threadChannelCache);
         }
         private async Task LogMessageAsync(SocketMessage message)
         {

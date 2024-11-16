@@ -6,7 +6,15 @@ namespace Discord_Log_Bot.Helpers
     {
         public static string GetLogFilePath(ISocketMessageChannel channel)
         {
-            var logDirectory = Path.Combine("Logs", channel.Id.ToString());
+            string? logDirectory = null;
+            if (channel is SocketThreadChannel)
+            {
+                logDirectory = Path.Combine("Logs/", $"Thread_{channel.Name}_{channel.Id}");
+            }
+            else
+            {
+                logDirectory = Path.Combine("Logs/", $"Channel_{channel.Name}_{channel.Id}");
+            }
 
             if (!Directory.Exists(logDirectory))
             {
