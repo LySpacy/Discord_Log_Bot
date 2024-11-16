@@ -96,6 +96,7 @@ namespace Discord_Log_Bot.Moduls
         }
 
         [Command("enablelogall")]
+        [RequireUserPermission(GuildPermission.Administrator)]
         public async Task EnableLoggingAllCommand()
         {
             await _channelLogController.EnableLoggingForAllChannels(Context);
